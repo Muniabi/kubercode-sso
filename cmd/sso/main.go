@@ -9,13 +9,31 @@ import (
 	"kubercode/internal/domain/auth"
 	"kubercode/internal/infrastructure/http/handlers"
 	"kubercode/internal/infrastructure/http/middleware"
-	"kubercode/internal/infrastructure/repository/mongodb"
+
+	_ "kubercode/docs" // импортируем сгенерированную документацию
 
 	"github.com/gin-gonic/gin"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
+// @title           KuberCode SSO API
+// @version         1.0
+// @description     Микросервис аутентификации и авторизации KuberCode SSO.
+// @termsOfService  http://swagger.io/terms/
+// @contact.name   API Support
+// @contact.url    http://www.swagger.io/support
+// @contact.email  support@kubercode.com
+// @license.name  Apache 2.0
+// @license.url   http://www.apache.org/licenses/LICENSE-2.0.html
+// @host      localhost:1488
+// @BasePath  /api/v1
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Type "Bearer" followed by a space and JWT token.
 func main() {
 	// Подключаемся к MongoDB
 	ctx := context.Background()
@@ -38,15 +56,13 @@ func main() {
 	db := client.Database("sso")
 
 	// Инициализируем репозиторий
-	authRepo := mongodb.NewAuthRepository(db)
+	authRepo := auth.NewRepository(db)
 
 	// Инициализируем сервис
 	authService := auth.NewService(
 		authRepo,
-		os.Getenv("ACCESS_SECRET"),
-		os.Getenv("REFRESH_SECRET"),
-		15*time.Minute,  // Access token duration
-		7*24*time.Hour,  // Refresh token duration
+		os.Getenv("JWT_SECRET"),
+		60*time.Minute,  // Token expiry - 60 minutes
 	)
 
 	// Инициализируем обработчики
@@ -57,6 +73,9 @@ func main() {
 
 	// CORS middleware
 	router.Use(middleware.CORSMiddleware())
+
+	// Swagger
+	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	// API группа v1
 	v1 := router.Group("/api/v1")
