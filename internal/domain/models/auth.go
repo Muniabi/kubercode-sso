@@ -8,9 +8,8 @@ type SignUpRequest struct {
 }
 
 type LoginRequest struct {
-	Email       string `json:"email" validate:"required,email"`
-	Password    string `json:"password" validate:"required"`
-	DeviceToken string `json:"deviceToken" validate:"required"`
+	Email    string `json:"email" validate:"required,email"`
+	Password string `json:"password" validate:"required"`
 }
 
 type TokenResponse struct {
@@ -42,6 +41,7 @@ type ChangePasswordRequest struct {
 
 type ChangeEmailRequest struct {
 	NewEmail string `json:"newEmail" validate:"required,email"`
+	Password string `json:"password" validate:"required"`
 }
 
 type OTPRequest struct {
@@ -56,4 +56,4 @@ type OTPResponse struct {
 type RestorePasswordRequest struct {
 	Email       string `json:"email" validate:"required,email"`
 	NewPassword string `json:"newPassword" validate:"required,min=8"`
-} 
+}

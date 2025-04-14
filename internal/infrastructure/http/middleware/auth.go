@@ -35,7 +35,7 @@ func AuthMiddleware(authService *auth.Service) gin.HandlerFunc {
 		}
 
 		// Добавляем ID пользователя в контекст
-		c.Set("userID", resp.AccountID)
+		c.Set("userID", resp.ID.Hex())
 		c.Next()
 	}
 }

@@ -68,7 +68,7 @@ func (r *AuthRepository) DeleteUser(ctx context.Context, id primitive.ObjectID) 
 }
 
 func (r *AuthRepository) StoreRefreshToken(ctx context.Context, userID primitive.ObjectID, token string, expiresAt time.Time) error {
-	collection := r.db.Collection("refresh_tokens")
+	collection := r.db.Collection("tokens")
 	_, err := collection.InsertOne(ctx, bson.M{
 		"userId":    userID,
 		"token":     token,
@@ -79,7 +79,7 @@ func (r *AuthRepository) StoreRefreshToken(ctx context.Context, userID primitive
 }
 
 func (r *AuthRepository) FindRefreshToken(ctx context.Context, token string) (*primitive.ObjectID, error) {
-	collection := r.db.Collection("refresh_tokens")
+	collection := r.db.Collection("tokens")
 	var result struct {
 		UserID primitive.ObjectID `bson:"userId"`
 	}
@@ -94,13 +94,13 @@ func (r *AuthRepository) FindRefreshToken(ctx context.Context, token string) (*p
 }
 
 func (r *AuthRepository) DeleteRefreshToken(ctx context.Context, token string) error {
-	collection := r.db.Collection("refresh_tokens")
+	collection := r.db.Collection("tokens")
 	_, err := collection.DeleteOne(ctx, bson.M{"token": token})
 	return err
 }
 
 func (r *AuthRepository) DeleteAllUserRefreshTokens(ctx context.Context, userID primitive.ObjectID) error {
-	collection := r.db.Collection("refresh_tokens")
+	collection := r.db.Collection("tokens")
 	_, err := collection.DeleteMany(ctx, bson.M{"userId": userID})
 	return err
 }
