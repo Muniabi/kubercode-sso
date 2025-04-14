@@ -1,0 +1,59 @@
+version: "3.8"
+services:
+    kubercode-sso:
+        container_name: kubercode-sso
+        networks:
+            - app_network
+        build:
+            context: .
+            dockerfile: Dockerfile
+        ports:
+            - "50051:50051"
+            - "1488:1488"
+        depends_on:
+            mongodb:
+                condition: service_healthy
+
+    mongodb:
+        container_name: kubercode-sso-mongodb
+        networks:
+            - app_network
+        image: mongodb/mongodb-community-server:6.0-ubi8
+        environment:
+            - MONGODB_INITDB_ROOT_USERNAME=user
+            - MONGODB_INITDB_ROOT_PASSWORD=password
+        healthcheck:
+            test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+            interval: 10s
+            timeout: 30s
+            retries: 5
+            start_period: 10s
+        ports:
+            - "27017:27017"
+        volumes:
+            - type: volume
+              source: mongodb-volume-data
+              target: /var/lib/mongodb
+
+    redis:
+        image: redis:latest
+        container_name: kubercode-sso-redis
+        restart: always
+        networks:
+            - app_network
+        ports:
+            - "6379:6379"
+        volumes:
+            - redis:/data
+        environment:
+            - REDIS_PASSWORD=my-password
+            - REDIS_PORT=6379
+            - REDIS_DATABASES=16
+
+volumes:
+    mongodb-volume-data:
+    redis:
+
+networks:
+    app_network:
+        driver: bridge

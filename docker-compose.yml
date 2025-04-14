@@ -1,0 +1,131 @@
+version: "3.8"
+services:
+    traefik:
+        image: traefik:latest
+        command:
+            - --log.level=DEBUG
+            - --accesslog=true
+            - --api.insecure=true
+            - --api.dashboard=true
+            - --providers.docker=true
+            - --entrypoints.web.address=:80
+            - --entrypoints.grpc.address=:50051
+            - --entrypoints.api.address=:1488
+        ports:
+            - "80:80"
+            - "50051:50051"
+            - "1488:1488"
+        volumes:
+            - /var/run/docker.sock:/var/run/docker.sock
+        networks:
+            - app_network
+        labels:
+            - "traefik.enable=true"
+            - "traefik.http.routers.dashboard.rule=Host(`localhost`) && PathPrefix(`/dashboard`) || PathPrefix(`/api`)"
+            - "traefik.http.routers.dashboard.entrypoints=web"
+            - "traefik.http.routers.dashboard.service=api@internal"
+
+    eventstore.db:
+        image: eventstore/eventstore:24.2.0-jammy
+        environment:
+            - EVENTSTORE_CLUSTER_SIZE=1
+            - EVENTSTORE_RUN_PROJECTIONS=All
+            - EVENTSTORE_START_STANDARD_PROJECTIONS=true
+            - EVENTSTORE_HTTP_PORT=2113
+            - EVENTSTORE_INSECURE=true
+            - EVENTSTORE_ENABLE_ATOM_PUB_OVER_HTTP=true
+        ports:
+            - "2113:2113"
+        volumes:
+            - type: volume
+              source: eventstore-volume-data
+              target: /var/lib/eventstore
+            - type: volume
+              source: eventstore-volume-logs
+              target: /var/log/eventstore
+        healthcheck:
+            test: ["CMD", "curl", "-f", "http://localhost:2113/health/live"]
+            interval: 10s
+            timeout: 10s
+            retries: 5
+            start_period: 30s
+        networks:
+            - app_network
+
+    kubercode-sso:
+        build:
+            context: .
+            dockerfile: Dockerfile
+        container_name: kubercode-sso
+        ports:
+            - "1488:1488"
+        environment:
+            - MONGO_URI=mongodb://user:password@mongodb:27017
+            - REDIS_ADDRESS=redis:6379
+            - REDIS_PASSWORD=my-password
+            - JWT_PRIVATE_KEY_PATH=/app/certs/jwtRSA256-private.pem
+            - JWT_PUBLIC_KEY_PATH=/app/certs/jwtRSA256-public.pem
+        volumes:
+            - ./certs:/app/certs
+        depends_on:
+            mongodb:
+                condition: service_healthy
+            redis:
+                condition: service_healthy
+        networks:
+            - app_network
+        labels:
+            - "traefik.enable=true"
+            - "traefik.http.routers.kubercode-sso.rule=Host(`localhost`)"
+            - "traefik.http.routers.kubercode-sso.entrypoints=api"
+            - "traefik.http.services.kubercode-sso.loadbalancer.server.port=1488"
+            - "traefik.http.middlewares.limit-buffer.buffering.maxRequestBodyBytes=10485760"
+            - "traefik.http.routers.kubercode-sso.middlewares=limit-buffer"
+
+    mongodb:
+        image: mongo:latest
+        container_name: kubercode-sso-mongodb
+        environment:
+            - MONGO_INITDB_ROOT_USERNAME=user
+            - MONGO_INITDB_ROOT_PASSWORD=password
+            - MONGO_INITDB_DATABASE=kubercode-sso
+        ports:
+            - "27017:27017"
+        volumes:
+            - mongodb_data:/data/db
+        networks:
+            - app_network
+        healthcheck:
+            test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+            start_period: 40s
+
+    redis:
+        image: redis:latest
+        container_name: kubercode-sso-redis
+        command: redis-server --requirepass my-password
+        ports:
+            - "6379:6379"
+        volumes:
+            - redis_data:/data
+        networks:
+            - app_network
+        healthcheck:
+            test: ["CMD", "redis-cli", "ping"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+            start_period: 40s
+
+volumes:
+    nats-volume:
+    eventstore-volume-data:
+    eventstore-volume-logs:
+    mongodb_data:
+    redis_data:
+
+networks:
+    app_network:
+        driver: bridge

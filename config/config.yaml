@@ -1,0 +1,53 @@
+env: "local"
+JWTAlgorithm: "RSA256"
+privateKeyPath: "certs/jwtRSA256-private.pem"
+publicKeyPath: "certs/jwtRSA256-public.pem"
+refreshTokenDurationDays: 30
+accessTokenDurationMinutes: 10
+eventStoreConnectionString: "esdb://localhost:2113?tls=false"
+mongoDbConnectionString: "mongodb://localhost:27017"
+projectionsGroupName: "kubercode-sso"
+accountPrefix: "user-"
+poolSize: 60
+redisAddress: "localhost:6379"
+redisPassword: ""
+otpExpirationDurationSeconds: 180
+otpLength: 6
+smtpHost: "localhost"
+smtpPort: "1025"
+SMPTUsername: "test@example.com"
+SMPTPassword: "password"
+ourEmail: "test@example.com"
+smtpGmailHost: "smtp.gmail.com"
+smtpGmailPort: "587"
+natsURL: "http://localhost:4222"
+subject: "email"
+gmailEmail: "test@example.com"
+http:
+    port: 1488
+    timeout: 10h
+
+mongodb:
+    uri: mongodb://localhost:27017
+    database: kubercode-sso
+    options:
+        maxPoolSize: 100
+        minPoolSize: 5
+        maxConnIdleTime: 30m
+        connectTimeout: 10s
+        serverSelectionTimeout: 5s
+        retryWrites: true
+        retryReads: true
+        maxStaleness: 120s
+        compressors: ["zlib"]
+        zlibCompressionLevel: 6
+        maxConnecting: 2
+        socketTimeout: 30s
+        heartbeatFrequency: 10s
+        appName: "kubercode-sso"
+        directConnection: false
+        replicaSet: ""
+        readPreference: "primary"
+        writeConcern: "majority"
+        authSource: "admin"
+        authMechanism: "SCRAM-SHA-256"
