@@ -1,22 +1,24 @@
-FROM golang:1.22-alpine AS builder
+FROM golang:1.24 AS builder
 
 WORKDIR /app
 
-COPY go.mod ./
-COPY go.sum ./
+COPY go.mod go.sum ./
 
-RUN go mod tidy
 RUN go mod download
 
 COPY . .
 
-RUN go build -o kubercode-sso ./cmd/sso/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -o kubercode-sso ./cmd/sso/main.go
 
-FROM alpine:latest
+FROM debian:bookworm-slim
 
 LABEL org.opencontainers.image.title="kubercode-sso"
 LABEL org.opencontainers.image.description="SSO Service for Kubercode"
 LABEL org.opencontainers.image.vendor="Kubercode"
+
+RUN apt-get update && \
+    apt-get install -y ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /root/
 

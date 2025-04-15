@@ -10,18 +10,26 @@ services:
         ports:
             - "50051:50051"
             - "1488:1488"
+        environment:
+            - MONGO_URI=mongodb://user:password@mongodb:27017
+            - JWT_SECRET=your-secret-key
+            - REDIS_HOST=redis
+            - REDIS_PORT=6379
+            - REDIS_PASSWORD=my-password
         depends_on:
             mongodb:
                 condition: service_healthy
+            redis:
+                condition: service_started
 
     mongodb:
         container_name: kubercode-sso-mongodb
         networks:
             - app_network
-        image: mongodb/mongodb-community-server:6.0-ubi8
+        image: mongo:6.0
         environment:
-            - MONGODB_INITDB_ROOT_USERNAME=user
-            - MONGODB_INITDB_ROOT_PASSWORD=password
+            - MONGO_INITDB_ROOT_USERNAME=user
+            - MONGO_INITDB_ROOT_PASSWORD=password
         healthcheck:
             test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
             interval: 10s
@@ -33,7 +41,7 @@ services:
         volumes:
             - type: volume
               source: mongodb-volume-data
-              target: /var/lib/mongodb
+              target: /data/db
 
     redis:
         image: redis:latest
@@ -49,6 +57,7 @@ services:
             - REDIS_PASSWORD=my-password
             - REDIS_PORT=6379
             - REDIS_DATABASES=16
+        command: redis-server --requirepass my-password
 
 volumes:
     mongodb-volume-data:

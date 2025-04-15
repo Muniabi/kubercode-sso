@@ -5,12 +5,12 @@ publicKeyPath: "certs/jwtRSA256-public.pem"
 refreshTokenDurationDays: 30
 accessTokenDurationMinutes: 10
 eventStoreConnectionString: "esdb://localhost:2113?tls=false"
-mongoDbConnectionString: "mongodb://localhost:27017"
+mongoDbConnectionString: "mongodb://user:password@mongodb:27017"
 projectionsGroupName: "kubercode-sso"
 accountPrefix: "user-"
 poolSize: 60
-redisAddress: "localhost:6379"
-redisPassword: ""
+redisAddress: "redis:6379"
+redisPassword: "my-password"
 otpExpirationDurationSeconds: 180
 otpLength: 6
 smtpHost: "localhost"
@@ -28,7 +28,7 @@ http:
     timeout: 10h
 
 mongodb:
-    uri: mongodb://localhost:27017
+    uri: mongodb://user:password@mongodb:27017
     database: kubercode-sso
     options:
         maxPoolSize: 100
