@@ -5,7 +5,7 @@ services:
         networks:
             - app_network
         build:
-            context: .
+            context: ./sso
             dockerfile: Dockerfile
         ports:
             - "50051:50051"
@@ -23,7 +23,7 @@ services:
                 condition: service_started
 
     mongodb:
-        container_name: kubercode-sso-mongodb
+        container_name: kubercode-mongodb
         networks:
             - app_network
         image: mongo:6.0
@@ -45,7 +45,7 @@ services:
 
     redis:
         image: redis:latest
-        container_name: kubercode-sso-redis
+        container_name: kubercode-redis
         restart: always
         networks:
             - app_network

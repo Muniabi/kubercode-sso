@@ -4,13 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/EventStore/EventStore-Client-Go/v4/esdb"
-	"github.com/google/uuid"
 	"io"
-	"log/slog"
 	"kubercode-sso/config"
 	"kubercode-sso/internal/domain/auth/projections"
 	"kubercode-sso/internal/infrastructure/es"
+	"log/slog"
+
+	"github.com/EventStore/EventStore-Client-Go/v4/esdb"
+	"github.com/google/uuid"
 )
 
 type EventStore interface {
