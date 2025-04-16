@@ -132,7 +132,7 @@ func (s *Service) SignUp(ctx context.Context, req *SignUpRequest) (*SignUpRespon
 	// Проверяем, существует ли пользователь
 	existingUser, err := s.repo.GetUserByEmail(ctx, req.Email)
 	if err == nil && existingUser != nil {
-		return nil, errors.New("user already exists")
+		return nil, ErrUserAlreadyExists
 	}
 
 	// Создаем нового пользователя

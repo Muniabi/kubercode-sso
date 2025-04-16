@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"log"
 	"net/http"
 
@@ -49,15 +50,15 @@ func (h *AuthHandler) SignUp(c *gin.Context) {
 
 	resp, err := h.service.SignUp(c.Request.Context(), authReq)
 	if err != nil {
-		switch err {
-		case auth.ErrUserAlreadyExists:
+		switch {
+		case errors.Is(err, auth.ErrUserAlreadyExists):
 			log.Printf("[SignUp] Пользователь уже существует: %s", req.Email)
 			c.JSON(http.StatusConflict, gin.H{"error": "User already exists"})
 		default:
 			log.Printf("[SignUp] Внутренняя ошибка сервера: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
 		}
-		return
+		return 
 	}
 
 	log.Printf("[SignUp] Успешная регистрация пользователя: %s", req.Email)
