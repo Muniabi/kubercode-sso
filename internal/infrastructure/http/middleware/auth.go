@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"strings"
 
@@ -34,23 +35,30 @@ func AuthMiddleware(authService *auth.Service) gin.HandlerFunc {
 			return
 		}
 
-		// Добавляем ID пользователя в контекст
+		// Добавляем информацию о пользователе в контекст
 		c.Set("userID", resp.ID.Hex())
+		c.Set("userEmail", resp.Email)
+		c.Set("userIsMentor", resp.IsMentor)
+
+		// Добавляем токен в контекст запроса
+		ctx := context.WithValue(c.Request.Context(), "token", token)
+		c.Request = c.Request.WithContext(ctx)
+
 		c.Next()
 	}
 }
 
-func CORSMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+// func CORSMiddleware() gin.HandlerFunc {
+// 	return func(c *gin.Context) {
+// 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+// 		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+// 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
-		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(http.StatusOK)
-			return
-		}
+// 		if c.Request.Method == "OPTIONS" {
+// 			c.AbortWithStatus(http.StatusOK)
+// 			return
+// 		}
 
-		c.Next()
-	}
-} 
+// 		c.Next()
+// 	}
+// } 

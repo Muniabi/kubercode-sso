@@ -9,6 +9,7 @@ import (
 	"kubercode/internal/domain/models"
 
 	"github.com/gin-gonic/gin"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type AuthHandler struct {
@@ -61,7 +62,6 @@ func (h *AuthHandler) SignUp(c *gin.Context) {
 		return 
 	}
 
-	log.Printf("[SignUp] Успешная регистрация пользователя: %s", req.Email)
 	c.JSON(http.StatusOK, resp)
 }
 
@@ -77,7 +77,6 @@ func (h *AuthHandler) SignUp(c *gin.Context) {
 // @Router      /auth/login [post]
 // @Example     request - {"email": "test@example.com", "password": "password123", "deviceToken": "device123"}
 func (h *AuthHandler) Login(c *gin.Context) {
-	log.Printf("[Login] Получен запрос на вход от %s", c.ClientIP())
 	
 	var req models.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -93,7 +92,6 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	log.Printf("[Login] Успешный вход пользователя: %s", req.Email)
 	c.JSON(http.StatusOK, resp)
 }
 
@@ -108,22 +106,23 @@ func (h *AuthHandler) Login(c *gin.Context) {
 // @Router      /auth/logout [post]
 func (h *AuthHandler) Logout(c *gin.Context) {
 	log.Printf("[Logout] Получен запрос на выход от %s", c.ClientIP())
-	
-	token := c.GetHeader("Authorization")
-	if token == "" {
-		log.Printf("[Logout] Токен отсутствует в заголовке")
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Token is required"})
+
+	userID := c.GetString("userID")
+	if userID == "" {
+		log.Printf("[Logout] ID пользователя не найден в контексте")
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User ID not found"})
 		return
 	}
 
-	if err := h.service.Logout(c.Request.Context(), token); err != nil {
-		log.Printf("[Logout] Ошибка при выходе: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to logout"})
+	resp, err := h.service.Logout(c.Request.Context(), userID)
+	if err != nil {
+		log.Printf("[Logout] Ошибка выхода: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
 		return
 	}
 
-	log.Printf("[Logout] Успешный выход пользователя")
-	c.Status(http.StatusOK)
+	log.Printf("[Logout] Успешный выход пользователя: %s", userID)
+	c.JSON(http.StatusOK, resp)
 }
 
 // @Summary     Обновление токена
@@ -323,22 +322,23 @@ func (h *AuthHandler) RestorePassword(c *gin.Context) {
 // @Router      /auth/logout-all [post]
 func (h *AuthHandler) LogoutFromAllDevices(c *gin.Context) {
 	log.Printf("[LogoutFromAllDevices] Получен запрос на выход со всех устройств от %s", c.ClientIP())
-	
-	token := c.GetHeader("Authorization")
-	if token == "" {
-		log.Printf("[LogoutFromAllDevices] Токен отсутствует в заголовке")
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Token is required"})
+
+	userID := c.GetString("userID")
+	if userID == "" {
+		log.Printf("[LogoutFromAllDevices] ID пользователя не найден в контексте")
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User ID not found"})
 		return
 	}
 
-	if err := h.service.LogoutFromAllDevices(c.Request.Context(), token); err != nil {
-		log.Printf("[LogoutFromAllDevices] Ошибка выхода со всех устройств: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to logout from all devices"})
+	resp, err := h.service.LogoutFromAllDevices(c.Request.Context(), userID)
+	if err != nil {
+		log.Printf("[LogoutFromAllDevices] Ошибка выхода: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
 		return
 	}
 
-	log.Printf("[LogoutFromAllDevices] Успешный выход со всех устройств")
-	c.Status(http.StatusOK)
+	log.Printf("[LogoutFromAllDevices] Успешный выход со всех устройств пользователя: %s", userID)
+	c.JSON(http.StatusOK, resp)
 }
 
 // @Summary     Проверка токена
@@ -352,29 +352,35 @@ func (h *AuthHandler) LogoutFromAllDevices(c *gin.Context) {
 // @Router      /auth/verify [post]
 func (h *AuthHandler) VerifyToken(c *gin.Context) {
 	log.Printf("[VerifyToken] Получен запрос на проверку токена от %s", c.ClientIP())
-	
-	token := c.GetHeader("Authorization")
-	if token == "" {
-		log.Printf("[VerifyToken] Токен отсутствует в заголовке")
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Token is required"})
+
+	userID := c.GetString("userID")
+	userEmail := c.GetString("userEmail")
+	userIsMentor := c.GetBool("userIsMentor")
+
+	if userID == "" || userEmail == "" {
+		log.Printf("[VerifyToken] Информация о пользователе не найдена в контексте")
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User information not found"})
 		return
 	}
 
-	resp, err := h.service.VerifyToken(c.Request.Context(), token)
+	// Конвертируем строковый ID в ObjectID
+	id, err := primitive.ObjectIDFromHex(userID)
 	if err != nil {
-		log.Printf("[VerifyToken] Ошибка проверки токена: %v", err)
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+		log.Printf("[VerifyToken] Ошибка конвертации ID: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
 		return
 	}
 
-	log.Printf("[VerifyToken] Токен успешно проверен")
+	resp := &auth.UserInfo{
+		ID:       id,
+		Email:    userEmail,
+		IsMentor: userIsMentor,
+	}
+
+	log.Printf("[VerifyToken] Токен успешно проверен для пользователя: %s", userEmail)
 	c.JSON(http.StatusOK, resp)
 }
 
 type ErrorResponse struct {
 	Error string `json:"error"`
 }
-
-type SuccessResponse struct {
-	Message string `json:"message"`
-} 

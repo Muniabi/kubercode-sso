@@ -8,13 +8,10 @@ import (
 
 	"kubercode/internal/domain/auth"
 	"kubercode/internal/infrastructure/http/handlers"
-	"kubercode/internal/infrastructure/http/middleware"
+	"kubercode/internal/infrastructure/http/router"
 
 	_ "kubercode/docs" // импортируем сгенерированную документацию
 
-	"github.com/gin-gonic/gin"
-	swaggerFiles "github.com/swaggo/files"
-	ginSwagger "github.com/swaggo/gin-swagger"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -68,45 +65,11 @@ func main() {
 	// Инициализируем обработчики
 	authHandler := handlers.NewAuthHandler(authService)
 
-	// Создаем Gin роутер
-	router := gin.Default()
-
-	// CORS middleware
-	router.Use(middleware.CORSMiddleware())
-
-	// Swagger
-	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
-
-	// API группа v1
-	v1 := router.Group("/api/v1")
-	{
-		// Auth группа
-		auth := v1.Group("/auth")
-		{
-			// Публичные маршруты
-			auth.POST("/signup", authHandler.SignUp)
-			auth.POST("/login", authHandler.Login)
-			auth.POST("/verify", authHandler.VerifyToken)
-			auth.POST("/restore-password", authHandler.RestorePassword)
-			auth.POST("/otp/send", authHandler.SendOTP)
-			auth.POST("/otp/verify", authHandler.VerifyOTP)
-
-			// Защищенные маршруты
-			protected := auth.Group("")
-			protected.Use(middleware.AuthMiddleware(authService))
-			{
-				protected.POST("/change-password", authHandler.ChangePassword)
-				protected.POST("/change-email", authHandler.ChangeEmail)
-				protected.POST("/logout", authHandler.Logout)
-				protected.POST("/refresh", authHandler.RefreshToken)
-				protected.POST("/logout-all", authHandler.LogoutFromAllDevices)
-			}
-		}
-	}
+	// Инициализация роутера
+	router := router.NewRouter(authHandler, authService)
 
 	// Запускаем сервер
-	server := router.Run(":1488")
-	if err := server; err != nil {
+	if err := router.Run(":1488"); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
-} 
+}

@@ -6,7 +6,9 @@ import (
 	"log"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt"
+	"github.com/redis/go-redis/v9"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -16,19 +18,22 @@ var (
 	ErrInvalidCredentials = errors.New("invalid credentials")
 	ErrInvalidToken      = errors.New("invalid token")
 	ErrUserAlreadyExists = errors.New("user already exists")
+	ErrTokenRevoked      = errors.New("token has been revoked")
 )
 
 type Service struct {
 	repo        *Repository
 	jwtSecret   []byte
 	tokenExpiry time.Duration
+	redis       *redis.Client
 }
 
-func NewService(repo *Repository, jwtSecret string, tokenExpiry time.Duration) *Service {
+func NewService(repo *Repository, jwtSecret string, tokenExpiry time.Duration, redis *redis.Client) *Service {
 	return &Service{
 		repo:        repo,
 		jwtSecret:   []byte(jwtSecret),
 		tokenExpiry: tokenExpiry,
+		redis:       redis,
 	}
 }
 
@@ -43,10 +48,6 @@ func (s *Service) Login(ctx context.Context, email, password string) (*LoginResp
 		return nil, errors.New("invalid credentials")
 	}
 
-	log.Printf("[Login] Сравниваем пароли для пользователя %s", email)
-	log.Printf("[Login] Хеш пароля в БД: %s", user.Password)
-	log.Printf("[Login] Введенный пароль: %s", password)
-
 	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password))
 	if err != nil {
 		log.Printf("[Login] Ошибка сравнения паролей: %v", err)
@@ -54,14 +55,14 @@ func (s *Service) Login(ctx context.Context, email, password string) (*LoginResp
 	}
 
 	// Генерируем access token
-	accessToken, err := s.generateToken(user)
+	accessToken, err := s.generateToken(user, false)
 	if err != nil {
 		log.Printf("[Login] Ошибка генерации access token: %v", err)
 		return nil, err
 	}
 
 	// Генерируем refresh token
-	refreshToken, err := s.generateToken(user)
+	refreshToken, err := s.generateToken(user, true)
 	if err != nil {
 		log.Printf("[Login] Ошибка генерации refresh token: %v", err)
 		return nil, err
@@ -71,7 +72,7 @@ func (s *Service) Login(ctx context.Context, email, password string) (*LoginResp
 	token := &Token{
 		UserID:       user.ID,
 		RefreshToken: refreshToken,
-		ExpiresAt:    time.Now().Add(s.tokenExpiry * 24 * 7), // Refresh token живет 7 дней
+		ExpiresAt:    time.Now().Add(time.Hour * 24 * 30), // Refresh token живет 30 дней
 		CreatedAt:    time.Now(),
 		UpdatedAt:    time.Now(),
 	}
@@ -81,7 +82,6 @@ func (s *Service) Login(ctx context.Context, email, password string) (*LoginResp
 		return nil, err
 	}
 
-	log.Printf("[Login] Успешный вход пользователя: %s", email)
 	return &LoginResponse{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
@@ -93,11 +93,15 @@ func (s *Service) Login(ctx context.Context, email, password string) (*LoginResp
 	}, nil
 }
 
-func (s *Service) generateToken(user *User) (string, error) {
+func (s *Service) generateToken(user *User, isRefresh bool) (string, error) {
 	claims := jwt.MapClaims{
 		"user_id": user.ID.Hex(),
 		"email":   user.Email,
-		"exp":     time.Now().Add(s.tokenExpiry).Unix(),
+		"exp":     time.Now().Add(time.Hour).Unix(), // Access token живет 1 час
+	}
+
+	if isRefresh {
+		claims["exp"] = time.Now().Add(time.Hour * 24 * 30).Unix() // Refresh token живет 30 дней
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -128,7 +132,7 @@ func (s *Service) GetUserFromToken(token *jwt.Token) (*User, error) {
 }
 
 // SignUp регистрирует нового пользователя
-func (s *Service) SignUp(ctx context.Context, req *SignUpRequest) (*SignUpResponse, error) {
+func (s *Service) SignUp(ctx context.Context, req *SignUpRequest) (*LoginResponse, error) {
 	// Проверяем, существует ли пользователь
 	existingUser, err := s.repo.GetUserByEmail(ctx, req.Email)
 	if err == nil && existingUser != nil {
@@ -154,23 +158,24 @@ func (s *Service) SignUp(ctx context.Context, req *SignUpRequest) (*SignUpRespon
 	}
 
 	// Генерируем токены
-	accessToken, err := s.generateToken(user)
+	accessToken, err := s.generateToken(user, false)
 	if err != nil {
 		return nil, err
 	}
 
-	// Генерируем refresh token (в реальном приложении здесь может быть другая логика)
-	refreshToken, err := s.generateToken(user)
+	refreshToken, err := s.generateToken(user, true)
 	if err != nil {
 		return nil, err
 	}
 
-	return &SignUpResponse{
-		ID:           user.ID,
-		Email:        user.Email,
-		IsMentor:     user.IsMentor,
+	return &LoginResponse{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
+		User: UserInfo{
+			ID:       user.ID,
+			Email:    user.Email,
+			IsMentor: user.IsMentor,
+		},
 	}, nil
 }
 
@@ -189,7 +194,7 @@ func (s *Service) RefreshToken(ctx context.Context, refreshToken string) (*Refre
 	}
 
 	// Генерируем новый access token
-	accessToken, err := s.generateToken(user)
+	accessToken, err := s.generateToken(user, false)
 	if err != nil {
 		return nil, err
 	}
@@ -200,31 +205,73 @@ func (s *Service) RefreshToken(ctx context.Context, refreshToken string) (*Refre
 }
 
 // Logout выполняет выход пользователя
-func (s *Service) Logout(ctx context.Context, refreshToken string) error {
-	// В реальном приложении здесь можно добавить логику для инвалидации refresh token
-	// Например, добавить его в черный список или удалить из базы данных
-	return nil
+func (s *Service) Logout(ctx context.Context, userID string) (*gin.H, error) {
+	// Получаем токен из контекста
+	token := ctx.Value("token").(string)
+	if token == "" {
+		log.Printf("[Logout] Токен не найден в контексте")
+		return nil, errors.New("token not found")
+	}
+
+	// Добавляем токен в черный список
+	expiration := time.Hour * 24 * 30 // 30 дней
+	err := s.redis.Set(ctx, "blacklist:"+token, "revoked", expiration).Err()
+	if err != nil {
+		log.Printf("[Logout] Ошибка добавления токена в черный список: %v", err)
+		return nil, err
+	}
+
+	return &gin.H{"message": "Successfully logged out"}, nil
 }
 
 // VerifyToken проверяет токен и возвращает информацию о пользователе
 func (s *Service) VerifyToken(ctx context.Context, token string) (*UserInfo, error) {
-	claims, err := s.ValidateToken(token)
+	// Проверяем, не отозван ли токен
+	exists, err := s.redis.Exists(ctx, "blacklist:"+token).Result()
 	if err != nil {
+		log.Printf("[VerifyToken] Ошибка проверки черного списка: %v", err)
+		return nil, ErrInvalidToken
+	}
+	if exists > 0 {
+		log.Printf("[VerifyToken] Токен находится в черном списке")
+		return nil, ErrTokenRevoked
+	}
+
+	// Валидируем токен
+	jwtToken, err := s.ValidateToken(token)
+	if err != nil {
+		log.Printf("[VerifyToken] Ошибка валидации токена: %v", err)
 		return nil, ErrInvalidToken
 	}
 
-	mapClaims, ok := claims.Claims.(jwt.MapClaims)
+	// Проверяем, что токен не истек
+	claims, ok := jwtToken.Claims.(jwt.MapClaims)
 	if !ok {
+		log.Printf("[VerifyToken] Неверный формат claims")
 		return nil, ErrInvalidToken
 	}
 
-	userID, err := primitive.ObjectIDFromHex(mapClaims["user_id"].(string))
+	// Проверяем время жизни токена
+	exp, ok := claims["exp"].(float64)
+	if !ok {
+		log.Printf("[VerifyToken] Отсутствует время жизни токена")
+		return nil, ErrInvalidToken
+	}
+
+	if time.Now().Unix() > int64(exp) {
+		log.Printf("[VerifyToken] Токен истек")
+		return nil, ErrInvalidToken
+	}
+
+	userID, err := primitive.ObjectIDFromHex(claims["user_id"].(string))
 	if err != nil {
+		log.Printf("[VerifyToken] Неверный формат ID пользователя: %v", err)
 		return nil, ErrInvalidToken
 	}
 
 	user, err := s.repo.GetUserByID(ctx, userID)
 	if err != nil {
+		log.Printf("[VerifyToken] Пользователь не найден: %v", err)
 		return nil, ErrInvalidToken
 	}
 
@@ -286,8 +333,43 @@ func (s *Service) ChangeEmail(ctx context.Context, userID string, newEmail, pass
 }
 
 // LogoutFromAllDevices выполняет выход со всех устройств
-func (s *Service) LogoutFromAllDevices(ctx context.Context, userID string) error {
-	// В реальном приложении здесь можно добавить логику для инвалидации всех refresh токенов
-	// Например, удалить все токены из базы данных для данного пользователя
-	return nil
+func (s *Service) LogoutFromAllDevices(ctx context.Context, userID string) (*gin.H, error) {
+	// Получаем текущий токен из контекста
+	currentToken := ctx.Value("token").(string)
+	if currentToken == "" {
+		log.Printf("[LogoutFromAllDevices] Токен не найден в контексте")
+		return nil, errors.New("token not found")
+	}
+
+	// Добавляем текущий токен в черный список
+	expiration := time.Hour * 24 * 30 // 30 дней
+	err := s.redis.Set(ctx, "blacklist:"+currentToken, "revoked", expiration).Err()
+	if err != nil {
+		log.Printf("[LogoutFromAllDevices] Ошибка добавления текущего токена в черный список: %v", err)
+		return nil, err
+	}
+
+	// Получаем все refresh токены пользователя
+	tokens, err := s.repo.GetUserTokens(ctx, userID)
+	if err != nil {
+		log.Printf("[LogoutFromAllDevices] Ошибка получения токенов пользователя: %v", err)
+		return nil, err
+	}
+
+	// Добавляем все токены в черный список
+	for _, token := range tokens {
+		err := s.redis.Set(ctx, "blacklist:"+token.RefreshToken, "revoked", expiration).Err()
+		if err != nil {
+			log.Printf("[LogoutFromAllDevices] Ошибка добавления токена в черный список: %v", err)
+			continue
+		}
+	}
+
+	// Удаляем все токены из базы данных
+	if err := s.repo.DeleteUserTokens(ctx, userID); err != nil {
+		log.Printf("[LogoutFromAllDevices] Ошибка удаления токенов из базы данных: %v", err)
+		return nil, err
+	}
+
+	return &gin.H{"message": "Successfully logged out from all devices"}, nil
 } 

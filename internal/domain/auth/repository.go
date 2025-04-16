@@ -41,20 +41,16 @@ func (r *Repository) CreateUser(ctx context.Context, user *User) error {
 func (r *Repository) GetUserByEmail(ctx context.Context, email string) (*User, error) {
 	collection := r.db.Collection("accounts")
 
-	log.Printf("[Repository] Ищем пользователя с email: %s", email)
-	
 	var user User
 	err := collection.FindOne(ctx, bson.M{"email": email}).Decode(&user)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			log.Printf("[Repository] Пользователь не найден в базе данных")
 			return nil, errors.New("user not found")
 		}
 		log.Printf("[Repository] Ошибка при поиске пользователя: %v", err)
 		return nil, err
 	}
 
-	log.Printf("[Repository] Пользователь найден: %+v", user)
 	return &user, nil
 }
 
@@ -140,5 +136,39 @@ func (r *Repository) DeleteToken(ctx context.Context, refreshToken string) error
 	collection := r.db.Collection("tokens")
 
 	_, err := collection.DeleteOne(ctx, bson.M{"refresh_token": refreshToken})
+	return err
+}
+
+// GetUserTokens возвращает все refresh токены пользователя
+func (r *Repository) GetUserTokens(ctx context.Context, userID string) ([]*Token, error) {
+	id, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	filter := bson.M{"user_id": id}
+	cursor, err := r.db.Collection("tokens").Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var tokens []*Token
+	if err = cursor.All(ctx, &tokens); err != nil {
+		return nil, err
+	}
+
+	return tokens, nil
+}
+
+// DeleteUserTokens удаляет все токены пользователя
+func (r *Repository) DeleteUserTokens(ctx context.Context, userID string) error {
+	id, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return err
+	}
+
+	filter := bson.M{"user_id": id}
+	_, err = r.db.Collection("tokens").DeleteMany(ctx, filter)
 	return err
 } 

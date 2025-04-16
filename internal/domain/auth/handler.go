@@ -86,10 +86,11 @@ func (h *Handler) Logout(c *gin.Context) {
 		return
 	}
 
-	if err := h.service.Logout(c.Request.Context(), req.RefreshToken); err != nil {
+	resp, err := h.service.Logout(c.Request.Context(), req.RefreshToken)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Successfully logged out"})
+	c.JSON(http.StatusOK, resp)
 } 

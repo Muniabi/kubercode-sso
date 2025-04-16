@@ -1,9 +1,10 @@
 package queries
 
 import (
-	"github.com/google/uuid"
 	"kubercode-sso/internal/domain/auth/values"
 	"kubercode-sso/internal/infrastructure/es"
+
+	"github.com/google/uuid"
 )
 
 type GetByEmailQuery struct {

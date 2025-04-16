@@ -1,37 +1,51 @@
 package router
 
 import (
-	"net/http"
+	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 
-	"kubercode-sso/internal/infrastructure/http/handlers"
-	"kubercode-sso/internal/infrastructure/http/middleware"
+	"kubercode/internal/domain/auth"
+	"kubercode/internal/infrastructure/http/handlers"
+	"kubercode/internal/infrastructure/http/middleware"
 )
 
-func NewRouter(authHandler *handlers.AuthHandler) http.Handler {
-	mux := http.NewServeMux()
+func NewRouter(authHandler *handlers.AuthHandler, authService *auth.Service, redis *redis.Client) *gin.Engine {
+	router := gin.Default()
 
-	// Публичные эндпоинты
-	mux.HandleFunc("/api/v1/auth/signup", authHandler.SignUp)
-	mux.HandleFunc("/api/v1/auth/login", authHandler.Login)
-	mux.HandleFunc("/api/v1/auth/verify-token", authHandler.VerifyToken)
-	mux.HandleFunc("/api/v1/auth/otp/send", authHandler.SendOTP)
-	mux.HandleFunc("/api/v1/auth/otp/verify", authHandler.VerifyOTP)
-	mux.HandleFunc("/api/v1/auth/password/restore", authHandler.RestorePassword)
+	// CORS middleware
+	// router.Use(middleware.CORSMiddleware())
 
-	// Защищенные эндпоинты
-	protected := http.NewServeMux()
-	protected.HandleFunc("/api/v1/auth/logout", authHandler.Logout)
-	protected.HandleFunc("/api/v1/auth/refresh-token", authHandler.RefreshToken)
-	protected.HandleFunc("/api/v1/auth/password", authHandler.ChangePassword)
-	protected.HandleFunc("/api/v1/auth/email", authHandler.ChangeEmail)
-	protected.HandleFunc("/api/v1/auth/logout-all-devices", authHandler.LogoutFromAllDevices)
+	// Swagger
+	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
-	// Применяем middleware к защищенным эндпоинтам
-	protectedWithAuth := middleware.AuthMiddleware(protected)
-	mux.Handle("/api/v1/auth/", protectedWithAuth)
+	// API группа v1
+	v1 := router.Group("/api/v1")
+	{
+		// Auth группа
+		auth := v1.Group("/auth")
+		{
+			// Публичные маршруты
+			auth.POST("/signup", authHandler.SignUp)
+			auth.POST("/login", authHandler.Login)
+			auth.POST("/restore-password", authHandler.RestorePassword)
+			auth.POST("/otp/send", authHandler.SendOTP)
+			auth.POST("/otp/verify", authHandler.VerifyOTP)
 
-	// Применяем CORS middleware ко всем эндпоинтам
-	handler := middleware.CORSMiddleware(mux)
+			// Защищенные маршруты
+			protected := auth.Group("")
+			protected.Use(middleware.AuthMiddleware(authService))
+			{
+				protected.GET("/verify", authHandler.VerifyToken)
+				protected.POST("/change-password", authHandler.ChangePassword)
+				protected.POST("/change-email", authHandler.ChangeEmail)
+				protected.POST("/logout", authHandler.Logout)
+				protected.POST("/refresh", authHandler.RefreshToken)
+				protected.POST("/logout-all", authHandler.LogoutFromAllDevices)
+			}
+		}
+	}
 
-	return handler
+	return router
 } 
