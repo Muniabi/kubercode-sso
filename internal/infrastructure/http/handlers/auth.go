@@ -49,7 +49,7 @@ func (h *AuthHandler) SignUp(c *gin.Context) {
 		IsMentor:    req.IsMentor,
 	}
 
-	resp, err := h.service.SignUp(c.Request.Context(), authReq)
+	_, err := h.service.SignUp(c.Request.Context(), authReq)
 	if err != nil {
 		switch {
 		case errors.Is(err, auth.ErrUserAlreadyExists):
@@ -62,7 +62,7 @@ func (h *AuthHandler) SignUp(c *gin.Context) {
 		return 
 	}
 
-	c.JSON(http.StatusOK, resp)
+	c.JSON(http.StatusOK, gin.H{"message": "User registered successfully"})
 }
 
 // @Summary     Вход в систему

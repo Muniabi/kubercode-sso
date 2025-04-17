@@ -16,7 +16,25 @@ import (
 	"kubercode/internal/domain/auth"
 	"kubercode/internal/infrastructure/http/handlers"
 	"kubercode/internal/infrastructure/http/router"
+
+	_ "kubercode/docs" // импортируем сгенерированную документацию
 )
+
+// @title           KuberCode SSO API
+// @version         1.0
+// @description     Микросервис аутентификации и авторизации KuberCode SSO.
+// @termsOfService  http://swagger.io/terms/
+// @contact.name   API Support
+// @contact.url    http://www.swagger.io/support
+// @contact.email  support@kubercode.com
+// @license.name  Apache 2.0
+// @license.url   http://www.apache.org/licenses/LICENSE-2.0.html
+// @host      localhost:1488
+// @BasePath  /api/v1
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Type "Bearer" followed by a space and JWT token.
 
 type Config struct {
 	JWTSecret    string
@@ -26,21 +44,39 @@ type Config struct {
 	RedisPass    string
 }
 
+func getEnv(key, defaultValue string) string {
+	value := os.Getenv(key)
+	if value == "" {
+		return defaultValue
+	}
+	return value
+}
+
 func main() {
+	// Инициализация конфигурации
 	cfg := Config{
-		JWTSecret:    os.Getenv("JWT_SECRET"),
+		JWTSecret:    getEnv("JWT_SECRET", "your-secret-key"),
 		TokenExpiry:  24 * time.Hour,
-		MongoURI:     os.Getenv("MONGO_URI"),
-		RedisAddr:    os.Getenv("REDIS_ADDR"),
-		RedisPass:    os.Getenv("REDIS_PASS"),
+		MongoURI:     getEnv("MONGO_URI", "mongodb://localhost:27017"),
+		RedisAddr:    getEnv("REDIS_ADDR", "localhost:6379"),
+		RedisPass:    getEnv("REDIS_PASS", ""),
 	}
 
+	log.Printf("Starting server with config: MongoDB=%s, Redis=%s", cfg.MongoURI, cfg.RedisAddr)
+
 	// Инициализация MongoDB
-	client, err := mongo.Connect(context.Background(), options.Client().ApplyURI(cfg.MongoURI))
+	ctx := context.Background()
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(cfg.MongoURI))
 	if err != nil {
 		log.Fatalf("Failed to connect to MongoDB: %v", err)
 	}
-	defer client.Disconnect(context.Background())
+	defer client.Disconnect(ctx)
+
+	// Проверяем подключение к MongoDB
+	if err := client.Ping(ctx, nil); err != nil {
+		log.Fatalf("Failed to ping MongoDB: %v", err)
+	}
+	log.Println("Successfully connected to MongoDB")
 
 	// Инициализация Redis
 	redisClient := redis.NewClient(&redis.Options{
@@ -48,6 +84,14 @@ func main() {
 		Password: cfg.RedisPass,
 		DB:       0,
 	})
+
+	// Проверяем подключение к Redis
+	if err := redisClient.Ping(ctx).Err(); err != nil {
+		log.Printf("Warning: Failed to connect to Redis: %v. Continuing without Redis...", err)
+		redisClient = nil
+	} else {
+		log.Println("Successfully connected to Redis")
+	}
 
 	// Инициализация репозитория
 	authRepo := auth.NewRepository(client.Database("sso"))
@@ -61,13 +105,15 @@ func main() {
 	// Инициализация роутера
 	router := router.NewRouter(authHandler, authService, redisClient)
 
-	// Запуск сервера
+	// Создаем HTTP сервер
 	srv := &http.Server{
 		Addr:    ":1488",
 		Handler: router,
 	}
 
+	// Запускаем сервер в отдельной горутине
 	go func() {
+		log.Printf("Server starting on port 1488")
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Failed to start server: %v", err)
 		}
