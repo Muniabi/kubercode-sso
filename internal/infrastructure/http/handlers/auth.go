@@ -32,7 +32,6 @@ func NewAuthHandler(service *auth.Service) *AuthHandler {
 // @Router      /auth/signup [post]
 // @Example     request - {"email": "test@example.com", "password": "password123", "deviceToken": "device123", "isMentor": false}
 func (h *AuthHandler) SignUp(c *gin.Context) {
-	log.Printf("[SignUp] Получен запрос на регистрацию от %s", c.ClientIP())
 	
 	var req models.SignUpRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -53,7 +52,6 @@ func (h *AuthHandler) SignUp(c *gin.Context) {
 	if err != nil {
 		switch {
 		case errors.Is(err, auth.ErrUserAlreadyExists):
-			log.Printf("[SignUp] Пользователь уже существует: %s", req.Email)
 			c.JSON(http.StatusConflict, gin.H{"error": "User already exists"})
 		default:
 			log.Printf("[SignUp] Внутренняя ошибка сервера: %v", err)
