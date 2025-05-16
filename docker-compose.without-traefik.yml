@@ -5,7 +5,7 @@ services:
         networks:
             - app_network
         build:
-            context: ./sso
+            context: .
             dockerfile: Dockerfile
         ports:
             - "50051:50051"

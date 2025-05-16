@@ -15,7 +15,7 @@ func NewRouter(authHandler *handlers.AuthHandler, authService *auth.Service, red
 	router := gin.Default()
 
 	// CORS middleware
-	// router.Use(middleware.CORSMiddleware())
+	router.Use(middleware.CORSMiddleware())
 
 	// Swagger
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
