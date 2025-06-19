@@ -17,6 +17,11 @@ func NewRouter(authHandler *handlers.AuthHandler, authService *auth.Service, red
 	// CORS middleware
 	router.Use(middleware.CORSMiddleware())
 
+	// Добавляем обработку OPTIONS запросов для всех маршрутов
+	router.OPTIONS("/*path", func(c *gin.Context) {
+		c.Status(200)
+	})
+
 	// Swagger
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
