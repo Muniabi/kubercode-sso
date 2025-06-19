@@ -14,14 +14,6 @@ import (
 func NewRouter(authHandler *handlers.AuthHandler, authService *auth.Service, redis *redis.Client) *gin.Engine {
 	router := gin.Default()
 
-	// CORS middleware
-	router.Use(middleware.CORSMiddleware())
-
-	// Добавляем обработку OPTIONS запросов для всех маршрутов
-	router.OPTIONS("/*path", func(c *gin.Context) {
-		c.Status(200)
-	})
-
 	// Swagger
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
