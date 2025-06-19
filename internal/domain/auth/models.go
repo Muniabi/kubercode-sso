@@ -35,12 +35,11 @@ type SignUpRequest struct {
 }
 
 // SignUpResponse представляет ответ на регистрацию
+// SignUpResponse представляет ответ на регистрацию
 type SignUpResponse struct {
-	ID           primitive.ObjectID `json:"id"`
-	Email        string            `json:"email"`
-	IsMentor     bool              `json:"is_mentor"`
-	AccessToken  string            `json:"access_token"`
-	RefreshToken string            `json:"refresh_token"`
+    AccessToken  string   `json:"access_token"`
+    RefreshToken string   `json:"refresh_token"`
+    User         UserInfo `json:"user"`
 }
 
 // LoginRequest представляет запрос на вход

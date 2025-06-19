@@ -169,14 +169,14 @@ func (s *Service) SignUp(ctx context.Context, req *SignUpRequest) (*LoginRespons
 	}
 
 	return &LoginResponse{
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
-		User: UserInfo{
-			ID:       user.ID,
-			Email:    user.Email,
-			IsMentor: user.IsMentor,
-		},
-	}, nil
+        AccessToken:  accessToken,
+        RefreshToken: refreshToken,
+        User: UserInfo{
+            ID:       user.ID,
+            Email:    user.Email,
+            IsMentor: user.IsMentor,
+        },
+    }, nil
 }
 
 // RefreshToken обновляет токен доступа
